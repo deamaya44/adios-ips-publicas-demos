@@ -1,0 +1,26 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: conector-rapido
+  namespace: demo-tunel
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: conector-rapido
+  template:
+    metadata:
+      labels:
+        app: conector-rapido
+    spec:
+      containers:
+        - name: cloudflared
+          image: cloudflare/cloudflared:2026.9.3
+          args:
+            - tunnel
+            - --no-autoupdate
+            - --url
+            - http://whoami.demo-tunel.svc.cluster.local:80
+          resources:
+            requests: { cpu: 10m, memory: 32Mi }
+            limits: { memory: 128Mi }

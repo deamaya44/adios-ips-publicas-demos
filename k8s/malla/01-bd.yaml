@@ -1,0 +1,86 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: demo-malla
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: postgres-init
+  namespace: demo-malla
+data:
+  lector.sh: |
+    psql -v ON_ERROR_STOP=1 -U "$POSTGRES_USER" -d "$POSTGRES_DB" -v clave="$LECTOR_PASSWORD" <<'SQL'
+    CREATE TABLE clientes (id serial PRIMARY KEY, nombre text NOT NULL, ciudad text NOT NULL);
+    INSERT INTO clientes (nombre, ciudad) VALUES ('Ana', 'Bogotá'), ('Luis', 'Medellín'), ('Sofía', 'Cali');
+    CREATE ROLE lector LOGIN PASSWORD :'clave';
+    ALTER ROLE lector SET default_transaction_read_only = on;
+    GRANT CONNECT ON DATABASE app TO lector;
+    GRANT USAGE ON SCHEMA public TO lector;
+    GRANT SELECT ON ALL TABLES IN SCHEMA public TO lector;
+    ALTER DEFAULT PRIVILEGES FOR ROLE app IN SCHEMA public GRANT SELECT ON TABLES TO lector;
+    SQL
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: postgres
+  namespace: demo-malla
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: postgres
+  template:
+    metadata:
+      labels:
+        app: postgres
+    spec:
+      containers:
+        - name: postgres
+          image: postgres:17-alpine
+          env:
+            - name: POSTGRES_USER
+              value: app
+            - name: POSTGRES_DB
+              value: app
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: postgres
+                  key: password
+            - name: LECTOR_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: postgres-lector
+                  key: password
+          ports:
+            - containerPort: 5432
+          readinessProbe:
+            exec:
+              command: ["pg_isready", "-U", "app"]
+            periodSeconds: 5
+          volumeMounts:
+            - name: init
+              mountPath: /docker-entrypoint-initdb.d
+              readOnly: true
+          resources:
+            requests: { cpu: 50m, memory: 128Mi }
+            limits: { memory: 256Mi }
+      volumes:
+        - name: init
+          configMap:
+            name: postgres-init
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgres
+  namespace: demo-malla
+spec:
+  type: ClusterIP
+  selector:
+    app: postgres
+  ports:
+    - port: 5432
+      targetPort: 5432

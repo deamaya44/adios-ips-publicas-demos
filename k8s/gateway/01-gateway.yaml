@@ -1,0 +1,38 @@
+apiVersion: gateway.networking.k8s.io/v1
+kind: Gateway
+metadata:
+  name: entrada
+  namespace: nginx-gateway
+spec:
+  gatewayClassName: nginx
+  listeners:
+    - name: http
+      port: 80
+      protocol: HTTP
+      allowedRoutes:
+        namespaces:
+          from: All
+    - name: https-publico
+      port: 443
+      protocol: HTTPS
+      hostname: extra.tu-dominio.com
+      tls:
+        mode: Terminate
+        certificateRefs:
+          - name: publico-tls
+            namespace: demo-extra
+      allowedRoutes:
+        namespaces:
+          from: All
+    - name: https-interno
+      port: 443
+      protocol: HTTPS
+      hostname: pgadmin.interno.tu-dominio.com
+      tls:
+        mode: Terminate
+        certificateRefs:
+          - name: interno-tls
+            namespace: demo-extra
+      allowedRoutes:
+        namespaces:
+          from: All

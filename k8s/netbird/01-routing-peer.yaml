@@ -1,0 +1,72 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: netbird
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: routing-peer
+  namespace: netbird
+spec:
+  serviceName: routing-peer
+  replicas: 2
+  selector:
+    matchLabels:
+      app: routing-peer
+  template:
+    metadata:
+      labels:
+        app: routing-peer
+    spec:
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                topologyKey: kubernetes.io/hostname
+                labelSelector:
+                  matchLabels:
+                    app: routing-peer
+      containers:
+        - name: netbird
+          image: netbirdio/netbird:0.80.0
+          env:
+            - name: NB_SETUP_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: netbird-setup-key
+                  key: key
+            - name: NB_HOSTNAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+          securityContext:
+            capabilities:
+              add: ["NET_ADMIN", "SYS_ADMIN", "SYS_RESOURCE"]
+          volumeMounts:
+            - name: tun
+              mountPath: /dev/net/tun
+            - name: estado
+              mountPath: /var/lib/netbird
+          resources:
+            requests: { cpu: 50m, memory: 64Mi }
+            limits: { memory: 256Mi }
+      volumes:
+        - name: tun
+          hostPath:
+            path: /dev/net/tun
+            type: CharDevice
+        - name: estado
+          emptyDir: {}
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: routing-peer
+  namespace: netbird
+spec:
+  maxUnavailable: 1
+  selector:
+    matchLabels:
+      app: routing-peer

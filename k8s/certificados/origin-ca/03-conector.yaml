@@ -1,0 +1,79 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: conector-config
+  namespace: demo-extra
+data:
+  config.yaml: |
+    ingress:
+      - hostname: extra.tu-dominio.com
+        service: https://entrada-nginx.nginx-gateway.svc.cluster.local:443
+        originRequest:
+          originServerName: extra.tu-dominio.com
+      - service: http_status:404
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: whoami
+  namespace: demo-extra
+spec:
+  parentRefs:
+    - name: entrada
+      namespace: nginx-gateway
+      sectionName: https-publico
+  hostnames:
+    - extra.tu-dominio.com
+  rules:
+    - backendRefs:
+        - name: whoami
+          port: 80
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: conector
+  namespace: demo-extra
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: conector
+  template:
+    metadata:
+      labels:
+        app: conector
+    spec:
+      containers:
+        - name: cloudflared
+          image: cloudflare/cloudflared:2026.9.3
+          args:
+            - tunnel
+            - --no-autoupdate
+            - --metrics
+            - 0.0.0.0:2000
+            - --config
+            - /etc/cloudflared/config.yaml
+            - run
+          env:
+            - name: TUNNEL_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: tunel-token
+                  key: token
+          volumeMounts:
+            - name: config
+              mountPath: /etc/cloudflared
+              readOnly: true
+          readinessProbe:
+            httpGet:
+              path: /ready
+              port: 2000
+            periodSeconds: 10
+          resources:
+            requests: { cpu: 10m, memory: 32Mi }
+            limits: { memory: 128Mi }
+      volumes:
+        - name: config
+          configMap:
+            name: conector-config

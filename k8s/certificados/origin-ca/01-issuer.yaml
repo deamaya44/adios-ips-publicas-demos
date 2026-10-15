@@ -1,0 +1,11 @@
+apiVersion: cert-manager.k8s.cloudflare.com/v1
+kind: OriginIssuer
+metadata:
+  name: cloudflare-origin-ca
+  namespace: demo-extra
+spec:
+  requestType: OriginECC
+  auth:
+    tokenRef:
+      name: cloudflare-origin-ca
+      key: api-token
